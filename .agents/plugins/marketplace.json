@@ -1,0 +1,20 @@
+{
+  "name": "agent-workspaces",
+  "interface": {
+    "displayName": "Agent Workspaces"
+  },
+  "plugins": [
+    {
+      "name": "workspaces",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --offline --script \"${PLUGIN_ROOT}/scripts/workspaces.py\" context",
+            "statusMessage": "Loading workspaces",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
