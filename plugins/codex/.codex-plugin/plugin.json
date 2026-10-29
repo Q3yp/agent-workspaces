@@ -1,6 +1,6 @@
 {
   "name": "workspaces",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Discover and activate local workspaces independently of skills.",
   "hooks": "./hooks/hooks.json"
 }

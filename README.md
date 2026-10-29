@@ -20,7 +20,7 @@ Keep each film in its own folder. Read direction.md before planning a film,
 and post.md when editing it.
 ```
 
-The catalog lists names, descriptions, and paths. Activation reads the live file; it does not copy the instructions into a plugin or change the session's working directory.
+The catalog lists names, descriptions, and paths. Activation reads the live file and updates the session's working root through the host runtime. In Codex, the update takes effect next turn: the initialization turn ends after activation, and workspace work begins in the following turn.
 
 ## Codex plugin
 
@@ -36,9 +36,27 @@ codex plugin add workspaces@agent-workspaces
 
 Review and trust its hook in `/hooks`, then start a new session. See the plugin guide for requirements, registration, write permissions, and limitations.
 
+## DeepSeek Harness plugin
+
+The [DSH plugin](plugins/dsh/README.md) is a native Cordis bundle with a live workspace catalog and activation tools. It changes the current session's working directory immediately and keeps workspaces separate from skills.
+
+```sh
+cd plugins/dsh
+npm ci --ignore-scripts
+cd ../..
+dsh plugin --profile desktop add ./plugins/dsh
+node plugins/dsh/cli.js add /absolute/workspace/path
+```
+
+Requires DSH 0.2.1-rc.2. Registration does not change filesystem permissions. See the plugin guide for packaging, other profiles, and runtime behavior.
+
+## Antigravity compatibility adapter
+
+The [Antigravity adapter](plugins/antigravity/README.md) exposes a workspace catalog through native hooks or T3's ACP prompt bridge and remembers an agent-managed working directory per conversation. It loads live instructions and tells the agent to use explicit paths. It does not change Antigravity's native root and therefore does not meet the standard's runtime-root activation requirement. The adapter includes installation support for T3 Code's managed ACP profile.
+
 ## Status
 
-This is a draft standard with one reference implementation for Codex. Other agent integrations are not implemented. The plugin's registration and activation commands have been exercised locally; automatic model selection has not been evaluated.
+This is a draft standard with reference implementations for Codex and DeepSeek Harness. Registration and runtime activation have been exercised locally; automatic model selection has not been evaluated.
 
 ## License
 

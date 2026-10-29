@@ -29,9 +29,11 @@ An implementation must document when it refreshes the catalog and how it reports
 
 ## Activation
 
-Activation reads the selected workspace's current `AGENTS.md` and supplies its absolute root path to the agent. Workspace-relative references resolve against that root.
+Activation reads the selected workspace's current `AGENTS.md` and sets its absolute path as the session's working root through the host runtime. Workspace-relative references resolve against that root. Returning a path or asking the agent to supply a working directory is not a runtime root change.
 
-Activation leaves the session's working directory unchanged. It does not require a new conversation and does not itself grant filesystem access. The agent reads linked guidelines and relevant nested `AGENTS.md` files as needed.
+Activation does not require a new conversation and does not itself grant filesystem access. A host may apply the root change at the next turn boundary. In that case, activation must state that the current turn still uses its original directory and that workspace work begins in the next turn. The initialization turn ends after activation. A tool call is not a turn boundary.
+
+An implementation must receive the host's acceptance before reporting that the root update was accepted. If the host is unreachable or rejects the update, activation fails rather than presenting instructions alone as successful activation. Integrations must document any host overrides that can replace the root on later turns. The agent reads linked guidelines and relevant nested `AGENTS.md` files as needed.
 
 Instructions remain in the workspace folder. Editing them takes effect on the next read without rebuilding or reinstalling the integration. Automatic file-change notification during a turn is optional and must not be implied when unavailable.
 
@@ -57,7 +59,7 @@ An integration exposes workspaces alongside skills, using host-supported context
 
 Existing folders can be registered in place after adding the required frontmatter. Sessions started inside a workspace may load its instructions natively; sessions started elsewhere read the same source through activation. Moving the folder is unnecessary.
 
-The [Codex reference implementation](plugins/codex/README.md) provides a session-start catalog and live activation command. Other hosts may implement these behaviors differently.
+The [Codex reference implementation](plugins/codex/README.md) provides a session-start catalog and live activation command. The [DeepSeek Harness implementation](plugins/dsh/README.md) refreshes its catalog on prompt assembly and activates through the native per-session working-directory service. Other hosts may implement these behaviors differently.
 
 ## Open questions
 

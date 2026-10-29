@@ -1,10 +1,10 @@
 # Workspaces for Codex
 
-Discover local bodies of work from any session, then read their current instructions without changing the session's working directory. Workspaces coexist with skills. This plugin contains no skills and runs no MCP server.
+Discover local bodies of work from any session, set the Codex thread's working root for subsequent turns, and read their current instructions. Workspaces coexist with skills. This plugin contains no skills and runs no MCP server.
 
 ## Install
 
-Requires Codex with plugin hooks, Python 3.11+, and `uv` on the hook process's PATH. From the repository root:
+Requires Codex with plugin hooks and `thread/settings/update` support (validated with 0.165.0), Python 3.11+, and `uv` on the hook process's PATH. From the repository root:
 
 ```sh
 uv run --script plugins/codex/scripts/workspaces.py list
@@ -41,7 +41,11 @@ uv run --offline --script plugins/codex/scripts/workspaces.py activate video-pro
 uv run --offline --script plugins/codex/scripts/workspaces.py remove /absolute/workspace/path
 ```
 
-Activation returns the current `AGENTS.md`, source path, and workspace root. It does not persist an active-workspace flag or change directories. The agent keeps the selected workspace in the conversation and reads relevant linked and nested instructions. Removal unregisters the folder and removes its exact write-root entry only if this plugin added it; it never deletes workspace files.
+Activation sends `thread/settings/update` with `cwd` to the Codex app-server hosting the existing thread, then returns the current `AGENTS.md`, source path, and accepted workspace root. It requires `CODEX_THREAD_ID` (provided inside Codex) or `--thread-id ID`. It connects through `codex app-server proxy` to the default daemon control socket; use `--socket PATH` for another control socket or `--url ws://127.0.0.1:PORT` for a reachable WebSocket app-server. The endpoint must host the existing thread; starting a separate server does not activate the current session. An unavailable server or rejected update is an activation failure, not an instruction-only fallback.
+
+The root change takes effect **next turn**. The current agent turn still uses its original directory. End the initialization turn after activation, then begin workspace work in the next turn. A tool call is not a turn boundary. Activation does not start a new conversation or move existing files. A wrapper that explicitly passes `cwd` on later turns can override the setting; calling Codex alone does not establish wrapper compatibility.
+
+The agent keeps the selected workspace in the conversation and reads relevant linked and nested instructions. Removal unregisters the folder and removes its exact write-root entry only if this plugin added it; it never deletes workspace files.
 
 ## Behavior and limits
 
@@ -61,10 +65,12 @@ On Codex CLI 0.164.0 on macOS:
 
 - Installed through `codex plugin marketplace add` and `codex plugin add`.
 - Queried the running app-server's `hooks/list`: plugin hook discovered and enabled, with no warnings or errors; trust status was `untrusted`.
-- Ran the installed script offline against a temporary copy of video-production instructions. Registration was idempotent; the catalog showed its metadata; activation returned the original instructions plus a subsequent live edit; cwd stayed unchanged. Existing configuration and write roots survived registration and removal.
+- Before runtime activation was added, ran the installed script offline against a temporary copy of video-production instructions. Registration was idempotent; the catalog showed its metadata; instruction reads reflected live edits. Existing configuration and write roots survived registration and removal.
 - Parsed the Python source successfully.
 
 No model request was made. Automatic workspace selection and context delivery after hook trust have not been exercised in a live conversation.
+
+Runtime activation was validated on Windows with Codex CLI 0.165.0: started a real local WebSocket app-server, created an ephemeral thread without a model request, and invoked the activation command against a temporary registered workspace. Activation returned the next-turn message and live instructions. An independent `thread/read` reported the expected new `cwd`. This checks the runtime update and command output, not model behavior or a wrapper's later-turn overrides.
 
 ## Uninstall
 

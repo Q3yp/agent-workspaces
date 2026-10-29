@@ -1,18 +1,24 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["PyYAML==6.0.3", "tomlkit==0.13.3"]
+# dependencies = ["PyYAML==6.0.3", "tomlkit==0.13.3", "websockets==15.0.1"]
 # ///
 
 import argparse
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
 import re
 import shlex
+import shutil
+import subprocess
 import sys
+import threading
 
 import tomlkit
 import yaml
+from websockets.exceptions import WebSocketException
+from websockets.sync.client import connect
 
 
 def read_workspace(path):
@@ -34,6 +40,54 @@ def read_workspace(path):
     return {"name": name, "description": description.strip(), "path": str(folder)}, text
 
 
+def change_thread_root(thread_id, root, socket_path, url):
+    with ExitStack() as stack:
+        if url:
+            connection = stack.enter_context(connect(url, open_timeout=15))
+            send = connection.send
+            receive = lambda: connection.recv(timeout=15)
+        else:
+            executable = shutil.which("codex.cmd" if os.name == "nt" else "codex")
+            if executable is None:
+                raise ValueError("Codex CLI is required to change the thread root")
+            command = [executable, "app-server", "proxy"]
+            if socket_path:
+                command.extend(["--sock", socket_path])
+            process = stack.enter_context(subprocess.Popen(
+                command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, encoding="utf-8"))
+            stack.callback(process.terminate)
+            timer = threading.Timer(15, process.kill)
+            timer.start()
+            stack.callback(timer.cancel)
+
+            def send(message):
+                process.stdin.write(message + "\n")
+                process.stdin.flush()
+
+            def receive():
+                line = process.stdout.readline()
+                if not line:
+                    raise ValueError("Codex control connection closed or timed out: " + process.stderr.read().strip())
+                return line
+
+        def request(identifier, method, params):
+            send(json.dumps({"id": identifier, "method": method, "params": params}))
+            while True:
+                response = json.loads(receive())
+                if response.get("id") == identifier:
+                    if "error" in response:
+                        raise ValueError(f"{method}: {response['error']['message']}")
+                    return response["result"]
+
+        request(1, "initialize", {
+            "clientInfo": {"name": "agent-workspaces", "version": "0.2.0"},
+            "capabilities": {"experimentalApi": True},
+        })
+        send('{"method":"initialized"}')
+        request(2, "thread/settings/update", {"threadId": thread_id, "cwd": root})
+
+
 def main():
     parser = argparse.ArgumentParser(description="Register and activate local workspaces, independently of skills.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -41,7 +95,12 @@ def main():
     commands.add_parser("context", help="Emit the session-start workspace catalog")
     commands.add_parser("add", help="Register a folder and grant future workspace-write sessions access").add_argument("path")
     commands.add_parser("remove", help="Unregister a folder and revoke only the grant added by this plugin").add_argument("path")
-    commands.add_parser("activate", help="Read current workspace instructions without changing cwd").add_argument("name")
+    activate = commands.add_parser("activate", help="Set the Codex thread root for subsequent turns and read live instructions")
+    activate.add_argument("name")
+    activate.add_argument("--thread-id", default=os.environ.get("CODEX_THREAD_ID"))
+    endpoint = activate.add_mutually_exclusive_group()
+    endpoint.add_argument("--socket", help="Control socket of the app-server hosting this thread (defaults to the Codex daemon)")
+    endpoint.add_argument("--url", help="WebSocket endpoint of the app-server hosting this thread")
     args = parser.parse_args()
     codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
     registry = codex_home / "workspaces.json"
@@ -108,8 +167,13 @@ def main():
         if selected is None:
             raise ValueError(f"Workspace not found: {args.name}. Run list to see registered workspaces.")
         workspace, text = selected
-        print(f"Workspace: {workspace['name']}\nWorkspace root: {workspace['path']}\nWorking directory unchanged: {Path.cwd()}\n")
-        print("Resolve workspace-relative paths against this root. Follow relevant nested AGENTS.md files when working in subfolders.\n")
+        if not args.thread_id:
+            raise ValueError("Activation requires CODEX_THREAD_ID or --thread-id for the existing Codex thread")
+        change_thread_root(args.thread_id, workspace["path"], args.socket, args.url)
+        print(f"Workspace: {workspace['name']}\nRoot set for subsequent turns: {workspace['path']}\nCurrent tool process directory: {Path.cwd()}\n")
+        print("Codex accepted the root update. It takes effect next turn, not after this tool call. "
+              "End this initialization turn now; begin workspace work in the next turn. "
+              "A host that explicitly supplies cwd on later turns can override this setting.\n")
         print(f"Source: {workspace['path']}/AGENTS.md\n\n{text}", end="")
         return
 
@@ -124,8 +188,9 @@ def main():
         "## Workspaces\n\n"
         "Workspaces hold instructions for a body of work and coexist with the available skills. "
         "Select a workspace by its description when it matches the user's task. "
-        f"Activate it by running `{command} activate NAME` to read its current AGENTS.md. "
-        "Activation supplies a path and instructions; it does not change the working directory or grant permissions. "
+        f"Activate it by running `{command} activate NAME` to set the existing Codex thread's root for subsequent turns and read its current AGENTS.md. "
+        "After successful activation, end the initialization turn; workspace work starts next turn in the new root. "
+        "Activation requires a reachable control socket or WebSocket endpoint for the app-server hosting this thread and does not grant permissions. "
         "Apply workspace instructions within that work's scope and use skills normally. "
         "Read linked guidelines as needed. Read the live file again when the user changes its instructions. "
         "Keep work-specific learning in the workspace's appropriate instruction file only when the user asks to save it.\n\n"
@@ -141,5 +206,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, ValueError, yaml.YAMLError) as error:
+    except (OSError, ValueError, WebSocketException, yaml.YAMLError) as error:
         sys.exit(f"workspaces: {error}")

@@ -1,0 +1,3 @@
+- insert:
+    - id: agent-workspaces
+      name: dsh-agent-workspaces

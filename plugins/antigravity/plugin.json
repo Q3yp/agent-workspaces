@@ -1,0 +1,4 @@
+{
+  "name": "workspaces",
+  "description": "Discover local workspaces and select a conversation-scoped working directory. Native session roots remain unchanged."
+}

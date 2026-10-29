@@ -1,0 +1,44 @@
+{
+  "name": "dsh-agent-workspaces",
+  "version": "0.1.0",
+  "description": "Discover and activate local workspaces independently of skills.",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "registry.js",
+    "cli.js",
+    "cordis.patch.yml",
+    "LICENSE"
+  ],
+  "bin": {
+    "dsh-workspaces": "cli.js"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Q3yp/agent-workspaces.git",
+    "directory": "plugins/dsh"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": "0.2.1-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-working-directory": "0.2.1-rc.2"
+  },
+  "overrides": {
+    "zod": "^4.6.6"
+  }
+}
